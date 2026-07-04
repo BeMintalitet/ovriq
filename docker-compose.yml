@@ -4,6 +4,7 @@ services:
   api:
     build: .
     restart: unless-stopped
+    env_file: .env
     environment:
       OVRIQ_DATABASE_URL: postgres://ovriq:${POSTGRES_PASSWORD}@db:5432/ovriq
     depends_on:
