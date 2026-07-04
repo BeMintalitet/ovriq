@@ -39,8 +39,8 @@ def test_full_lifecycle_exact_amounts():
     cid = res["contracts"][0]["contract_id"]
     e.apply(e.cmd_deliver(seller, cid, H))
     assert e.accounts[buyer] == oq("950")
-    assert e.accounts[seller] == oq("1049.75")   # 1000 + 50 - 0.5%
-    assert e.accounts["$TREASURY"] == oq("0.25")
+    assert e.accounts[seller] == oq("1048.75")   # 1000 + 50 - 0.5%
+    assert e.accounts["$TREASURY"] == oq("1.25")
     assert e.invariant_ok() and e.chain_ok()
 
 

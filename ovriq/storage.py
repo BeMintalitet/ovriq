@@ -31,6 +31,7 @@ class FileJournal:
         self.head = GENESIS
         self._fh = None
         self._replay_cache: list[dict] = []
+        self._seq_cache: list[tuple[int, dict]] = []
         if self.path.exists():
             self._replay_cache = self._load()
         self._fh = open(self.path, "a", encoding="utf-8")
@@ -51,12 +52,38 @@ class FileJournal:
                         f"journal tampered or corrupt at line {lineno} (seq {rec['seq']})")
                 prev = rec["hash"]
                 events.append(rec["event"])
+                self._seq_cache.append((rec["seq"], rec["event"]))
         self.seq = len(events)
         self.head = prev
         return events
 
-    def replay_events(self) -> list[dict]:
-        return list(self._replay_cache)
+    def replay_events(self, after_seq: int = 0) -> list[dict]:
+        """Alle events (default), eller kun events med seq > after_seq (snapshot-boot)."""
+        if after_seq <= 0:
+            return [ev for _, ev in self._seq_cache]
+        return [ev for seq, ev in self._seq_cache if seq > after_seq]
+
+    @property
+    def snapshot_path(self) -> Path:
+        return self.path.with_suffix(self.path.suffix + ".snapshot")
+
+    def save_snapshot(self, seq: int, state: dict) -> None:
+        """Atomisk snapshot: skriv temp + rename, saa en halv skrivning aldrig
+        kan efterlade en korrupt snapshot-fil."""
+        tmp = self.snapshot_path.with_suffix(self.snapshot_path.suffix + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump({"seq": seq, "state": state}, fh, separators=(",", ":"))
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, self.snapshot_path)
+
+    def load_snapshot(self):
+        """Returnér (seq, state) fra seneste snapshot, eller None hvis ingen."""
+        if not self.snapshot_path.exists():
+            return None
+        with open(self.snapshot_path, encoding="utf-8") as fh:
+            d = json.load(fh)
+        return d["seq"], d["state"]
 
     def append(self, event: dict) -> None:
         payload = json.dumps(event, sort_keys=True, separators=(",", ":"))

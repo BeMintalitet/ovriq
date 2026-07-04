@@ -68,6 +68,49 @@ class OvriqClient:
         r.raise_for_status()
         return r.json()
 
+    async def review(self, contract_id: int, rating: int) -> dict:
+        r = await self._http.post(f"/contracts/{contract_id}/review",
+                                  headers=self._h, json={"rating": rating})
+        r.raise_for_status()
+        return r.json()
+
+    async def post_task(self, category: str, title: str, bounty: str,
+                        ttl: float | None = None, expected_hash: str | None = None) -> dict:
+        body = {"category": category, "title": title, "bounty": str(bounty)}
+        if ttl:
+            body["ttl"] = ttl
+        if expected_hash:
+            body["expected_hash"] = expected_hash
+        r = await self._http.post("/tasks", headers=self._h, json=body)
+        r.raise_for_status()
+        return r.json()
+
+    async def open_tasks(self) -> list[dict]:
+        r = await self._http.get("/tasks")
+        r.raise_for_status()
+        return r.json()["tasks"]
+
+    async def claim_task(self, task_id: int) -> dict:
+        r = await self._http.post(f"/tasks/{task_id}/claim", headers=self._h)
+        r.raise_for_status()
+        return r.json()
+
+    async def deliver_task(self, task_id: int, payload_hash: str) -> dict:
+        r = await self._http.post(f"/tasks/{task_id}/deliver", headers=self._h,
+                                  json={"payload_hash": payload_hash})
+        r.raise_for_status()
+        return r.json()
+
+    async def accept_task(self, task_id: int) -> dict:
+        r = await self._http.post(f"/tasks/{task_id}/accept", headers=self._h)
+        r.raise_for_status()
+        return r.json()
+
+    async def reputation(self, node_id: str) -> dict:
+        r = await self._http.get(f"/reputation/{node_id}")
+        r.raise_for_status()
+        return r.json()
+
     async def orderbook(self, resource_type: str) -> dict:
         r = await self._http.get(f"/market/orderbook/{resource_type}")
         r.raise_for_status()

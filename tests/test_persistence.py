@@ -123,7 +123,7 @@ async def test_api_restart_preserves_state(tmp_path):
         rs = await http.get("/ledger/balance", headers=sh)
         rh = await http.get("/health")
     assert rb.json()["balance_oq"] == "950.0000"
-    assert rs.json()["balance_oq"] == "1049.7500"
+    assert rs.json()["balance_oq"] == "1048.7500"
     assert rh.json()["ledger_invariant_ok"] and rh.json()["chain_valid"]
 
 

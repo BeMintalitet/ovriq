@@ -28,8 +28,15 @@ def boot(journal_path: str | None = None) -> None:
         raise RuntimeError("PostgresJournal initialiseres via lifespan i prod-image")
     engine = OvriqEngine()
     journal = FileJournal(target)
-    for ev in journal.replay_events():
-        engine.apply(ev)
+    snap = journal.load_snapshot()
+    if snap is not None:
+        snap_seq, state = snap
+        engine.load_state(state)                 # spring direkte til snapshot-state
+        for ev in journal.replay_events(after_seq=snap_seq):  # afspil kun halen
+            engine.apply(ev)
+    else:
+        for ev in journal.replay_events():
+            engine.apply(ev)
 
 
 async def _boot_async() -> None:
@@ -58,8 +65,11 @@ async def lifespan(app: FastAPI):
     if journal is None:
         await _boot_async()
     reaper = asyncio.create_task(_reaper())
+    snapshotter = asyncio.create_task(_snapshotter())
     yield
     reaper.cancel()
+    snapshotter.cancel()
+    await _take_snapshot()   # sidste snapshot ved ren nedlukning
     if journal:
         r = journal.close()
         if hasattr(r, "__await__"):
@@ -76,7 +86,46 @@ async def _reaper():
                 engine.apply(ev)
 
 
-app = FastAPI(title="OVRIQ M2M Marketplace", version="1.0.0-fase1", lifespan=lifespan)
+async def _take_snapshot():
+    """Frys en konsistent state under lock og skriv den atomisk til disk."""
+    if journal is None or not hasattr(journal, "save_snapshot"):
+        return
+    async with _lock:
+        seq, state = journal.seq, engine.export_state()
+    journal.save_snapshot(seq, state)   # I/O uden for lock
+
+
+_last_snapshot_error: str | None = None
+
+
+async def _snapshotter():
+    global _last_snapshot_error
+    while True:
+        await asyncio.sleep(120)         # snapshot hvert 2. minut => altid hurtig boot
+        try:
+            await _take_snapshot()
+            _last_snapshot_error = None
+        except asyncio.CancelledError:
+            raise                        # cancellation skal boble op
+        except Exception as e:           # snapshot-fejl maa ALDRIG draebe loopet
+            _last_snapshot_error = f"{type(e).__name__}: {e}"
+
+
+app = FastAPI(
+    title="OVRIQ — M2M Marketplace API",
+    version="1.0.0",
+    description=(
+        "OVRIQ is a machine-to-machine marketplace where AI agents trade "
+        "resources and work with each other.\n\n"
+        "**Flow:** register a node (proof-of-work, no signup) → get starting "
+        "credits → post ASK/BID orders or tasks → escrow locks funds → deliver "
+        "with a hash proof → settle (minus 2.5% fee). Every state change is "
+        "written to a tamper-evident, hash-chained journal before it is confirmed.\n\n"
+        "Auth: send `X-Node-Id` and `X-Api-Key` headers (from /nodes/register)."
+    ),
+    lifespan=lifespan,
+    contact={"name": "OVRIQ", "url": "https://ovriq.xyz"},
+)
 
 from .webui import attach  # noqa: E402
 attach(app)
@@ -127,10 +176,27 @@ class DeliverReq(BaseModel):
     payload_hash: str = Field(min_length=64, max_length=64)
 
 
+class TaskPostReq(BaseModel):
+    category: str
+    title: str = Field(min_length=1, max_length=160)
+    bounty: str | float
+    ttl: float | None = Field(default=None, ge=10, le=86400)
+    expected_hash: str | None = Field(default=None, min_length=64, max_length=64)
+
+
+class TaskDeliverReq(BaseModel):
+    payload_hash: str = Field(min_length=64, max_length=64)
+
+
 @app.get("/health")
 async def health():
+    snap_seq = None
+    if journal and hasattr(journal, "load_snapshot"):
+        _snap = journal.load_snapshot()
+        snap_seq = _snap[0] if _snap else None
     return {"status": "ok", "uptime_s": round(time.time() - BOOT_TS, 1),
             "journal_seq": journal.seq if journal else 0,
+            "snapshot_seq": snap_seq,
             "journal_head": journal.head[:16] if journal else None,
             "ledger_invariant_ok": engine.invariant_ok(),
             "chain_valid": engine.chain_ok()}
@@ -177,6 +243,89 @@ async def my_contracts(state: str | None = None, node: Node = Depends(auth)):
                           and (state is None or c.state.value == state.upper())]}
 
 
+class ReviewReq(BaseModel):
+    rating: int = Field(ge=1, le=5)
+
+
+@app.post("/contracts/{contract_id}/review")
+async def review(contract_id: int, req: ReviewReq, node: Node = Depends(auth)):
+    try:
+        return await _execute(engine.cmd_review, node.node_id, contract_id,
+                              req.rating)
+    except EngineError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@app.get("/reputation/{node_id}")
+async def reputation(node_id: str):
+    try:
+        return engine.reputation(node_id)
+    except EngineError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/tasks")
+async def post_task(req: TaskPostReq, node: Node = Depends(auth)):
+    try:
+        return await _execute(engine.cmd_task_post, node.node_id, req.category,
+                              req.title, req.bounty, req.ttl, req.expected_hash)
+    except (EngineError, MoneyError) as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@app.post("/tasks/{task_id}/claim")
+async def claim_task(task_id: int, node: Node = Depends(auth)):
+    try:
+        return await _execute(engine.cmd_task_claim, node.node_id, task_id)
+    except EngineError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@app.post("/tasks/{task_id}/deliver")
+async def deliver_task(task_id: int, req: TaskDeliverReq, node: Node = Depends(auth)):
+    try:
+        return await _execute(engine.cmd_task_deliver, node.node_id, task_id,
+                              req.payload_hash)
+    except EngineError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@app.post("/tasks/{task_id}/accept")
+async def accept_task(task_id: int, node: Node = Depends(auth)):
+    try:
+        return await _execute(engine.cmd_task_accept, node.node_id, task_id)
+    except EngineError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@app.get("/tasks")
+async def list_tasks(state: str | None = None):
+    """Aabne opgaver (eller filtreret paa state) — workers finder arbejde her."""
+    out = [t.as_dict() for t in engine.tasks.values()
+           if state is None or t.state.value == state.upper()]
+    if state is None:
+        out = [t for t in out if t["state"] == "OPEN"]
+    return {"tasks": out}
+
+
+@app.get("/tasks/{task_id}")
+async def get_task(task_id: int):
+    t = engine.tasks.get(task_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="task not found")
+    return t.as_dict()
+
+
+@app.get("/market/stats")
+async def market_stats():
+    return engine.market_stats()
+
+
+@app.get("/leaderboard")
+async def leaderboard(limit: int = 10):
+    return {"leaderboard": engine.leaderboard(min(max(limit, 1), 50))}
+
+
 @app.get("/market/listings")
 async def listings():
     return {"listings": engine.open_asks()}
@@ -202,6 +351,21 @@ async def blocks(limit: int = 10):
     return {"height": len(engine.blocks), "chain_valid": engine.chain_ok(),
             "blocks": [{"height": b.height, "hash": b.block_hash,
                         "prev": b.prev_hash, "txs": b.n_txs} for b in bs]}
+
+
+@app.get("/admin/risk")
+async def admin_risk(x_admin_token: str | None = Header(None)):
+    """Compliance-Vagtens risikorapport. Kræver OVRIQ_ADMIN_TOKEN (constant-time).
+    Advisory — ingen node fryses automatisk; Controlleren eskalerer til ejeren."""
+    import hmac as _hmac
+    import os as _os
+    token = _os.environ.get("OVRIQ_ADMIN_TOKEN", "").strip()
+    if not token:
+        raise HTTPException(status_code=503, detail="admin risk API disabled (set OVRIQ_ADMIN_TOKEN)")
+    if not _hmac.compare_digest(token, (x_admin_token or "").strip()):
+        raise HTTPException(status_code=401, detail="invalid admin token")
+    flags = engine.risk_report()
+    return {"flag_count": len(flags), "flags": flags}
 
 
 @app.get("/metrics")
