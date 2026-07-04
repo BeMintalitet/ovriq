@@ -21,7 +21,16 @@ if [ -d "$DIR/.git" ]; then git -C "$DIR" pull -q
 else git clone -q "$REPO" "$DIR" || git clone -q "$REPO_FALLBACK" "$DIR"; fi
 
 echo "═══ [4/6] Miljø ═══"
-[ -f /root/ovriq.env ] && mv /root/ovriq.env "$DIR/.env"
+if [ -f /root/ovriq.env ]; then
+  # Bevar eksisterende POSTGRES_PASSWORD — Postgres-volumen husker kun det foerste
+  if [ -f "$DIR/.env" ] && grep -q '^POSTGRES_PASSWORD=' "$DIR/.env"; then
+    grep '^POSTGRES_PASSWORD=' "$DIR/.env" >> /root/ovriq.env.pw
+    grep -v '^POSTGRES_PASSWORD=' /root/ovriq.env > /root/ovriq.env.clean
+    cat /root/ovriq.env.clean /root/ovriq.env.pw > /root/ovriq.env
+    rm -f /root/ovriq.env.clean /root/ovriq.env.pw
+  fi
+  mv /root/ovriq.env "$DIR/.env"
+fi
 touch "$DIR/.env"; sed -i 's/\r$//' "$DIR/.env"
 grep -q '^POSTGRES_PASSWORD=' "$DIR/.env" || \
   echo "POSTGRES_PASSWORD=$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)" >> "$DIR/.env"
