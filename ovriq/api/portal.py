@@ -25,11 +25,18 @@ button:hover{background:rgba(57,255,142,.08)}button:disabled{opacity:.4;cursor:w
 word-break:break-all;margin:8px 0;border:1px dashed var(--mag)}
 .big{font-size:30px;color:var(--neon);font-family:Consolas,monospace}
 .msg{font-size:13px;color:var(--dim);margin-top:8px}.ok{color:var(--neon)}.err{color:#ff4d4d}
-a{color:var(--cyan)}</style>"""
+a{color:var(--cyan)}
+.ovnav{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid #1d2a44}
+.ovnav a{padding:7px 12px;border-radius:8px;color:var(--dim);text-decoration:none;font-size:12px;letter-spacing:1px;border:1px solid transparent}
+.ovnav a:hover{color:var(--txt);border-color:#1d2a44}
+.ovnav a.active{color:var(--neon);border-color:var(--neon)}
+.ovnav a.home{color:var(--mag);border-color:var(--mag)}
+.ovnav .spacer{flex:1}</style>"""
 
 PORTAL_HTML = """<!DOCTYPE html><html lang="da"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>OVRIQ Portal</title>
 """ + STYLE + """</head><body><div class="w">
+<nav class="ovnav"><a class="home" href="https://ovriq.xyz">ovriq.xyz</a><a href="/dashboard">Marked</a><a href="/portal" class="active">Portal</a><a href="/docs">API-docs</a><span class="spacer"></span><a href="https://github.com/BeMintalitet/ovriq">GitHub</a></nav>
 <div class="logo">OVRIQ</div><h1>Portal</h1>
 <div class="sub">Opret din node, koeb credits, se din saldo. Din noegle gemmes kun i DIN browser.</div>
 
@@ -89,6 +96,7 @@ refresh();
 RETURN_HTML = """<!DOCTYPE html><html lang="da"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>OVRIQ · Gennemfoerer koeb</title>
 """ + STYLE + """</head><body><div class="w">
+<nav class="ovnav"><a class="home" href="https://ovriq.xyz">ovriq.xyz</a><a href="/dashboard">Marked</a><a href="/portal">Portal</a><a href="/docs">API-docs</a><span class="spacer"></span><a href="https://github.com/BeMintalitet/ovriq">GitHub</a></nav>
 <div class="logo">OVRIQ</div><h1 id="h">Gennemfoerer koeb…</h1>
 <div class="card"><div class="msg" id="m">Indloeser hos PayPal…</div>
 <div class="big" id="res"></div></div>
@@ -111,6 +119,7 @@ else{h.textContent='Kunne ikke indloese';m.innerHTML='<span class="err">'+(d.det
 
 CANCEL_HTML = """<!DOCTYPE html><html lang="da"><head><meta charset="utf-8">
 """ + STYLE + """<title>OVRIQ · Annulleret</title></head><body><div class="w">
+<nav class="ovnav"><a class="home" href="https://ovriq.xyz">ovriq.xyz</a><a href="/dashboard">Marked</a><a href="/portal">Portal</a><a href="/docs">API-docs</a><span class="spacer"></span><a href="https://github.com/BeMintalitet/ovriq">GitHub</a></nav>
 <div class="logo">OVRIQ</div><h1>Koeb annulleret</h1>
 <div class="card"><div class="msg">Ingen penge er trukket. <a href="/portal">Tilbage til portalen</a></div></div>
 </div></body></html>"""
@@ -140,7 +149,7 @@ def attach_portal(app) -> None:
         import html as _h
         return ("<!DOCTYPE html><html lang='da'><head><meta charset='utf-8'>"
                 "<title>OVRIQ · " + title + "</title>" + STYLE + "</head><body>"
-                "<div class='w'><div class='logo'>OVRIQ</div>"
+                "<div class='w'>" + '<nav class="ovnav"><a class="home" href="https://ovriq.xyz">ovriq.xyz</a><a href="/dashboard">Marked</a><a href="/portal">Portal</a><a href="/docs">API-docs</a><span class="spacer"></span><a href="https://github.com/BeMintalitet/ovriq">GitHub</a></nav>' + "<div class='logo'>OVRIQ</div>"
                 "<div class='card'><pre style='white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.6'>"
                 + _h.escape(body) + "</pre></div>"
                 "<a href='/portal'>← Portal</a></div></body></html>")

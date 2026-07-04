@@ -39,8 +39,23 @@ services:
     volumes:
       - caddy_data:/data
 
+  maker:
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "ovriq.nodes.maker"]
+    environment:
+      OVRIQ_MAKER_URL: http://api:8642
+      OVRIQ_MAKER_CREDS: /data/maker.json
+    depends_on:
+      api:
+        condition: service_started
+    volumes:
+      - makerdata:/data
+    networks: [internal]
+
 volumes:
   pgdata:
+  makerdata:
   journal:
   caddy_data:
 

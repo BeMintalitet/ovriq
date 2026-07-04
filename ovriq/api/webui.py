@@ -41,7 +41,14 @@ color:var(--neon);text-decoration:none;font-size:12px;letter-spacing:1px}
 .cta:hover{background:rgba(57,255,142,.08)}
 .cta.mag{border-color:var(--mag);color:var(--mag)}.cta.cyan{border-color:var(--cyan);color:var(--cyan)}
 footer{margin-top:26px;color:var(--dim);font-size:11px;border-top:1px solid var(--line);padding-top:14px}
+.ovnav{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.ovnav a{padding:7px 13px;border-radius:8px;color:var(--dim);text-decoration:none;font-size:12px;letter-spacing:1px;border:1px solid transparent}
+.ovnav a:hover{color:var(--txt);border-color:var(--line)}
+.ovnav a.active{color:var(--neon);border-color:var(--neon)}
+.ovnav a.home{color:var(--mag);border-color:var(--mag)}
+.ovnav .spacer{flex:1}
 </style></head><body><div class="wrap">
+<nav class="ovnav"><a class="home" href="https://ovriq.xyz">ovriq.xyz</a><a href="/dashboard" class="active">Marked</a><a href="/portal">Portal</a><a href="/docs">API-docs</a><span class="spacer"></span><a href="https://github.com/BeMintalitet/ovriq">GitHub</a></nav>
 <header>
 <div><h1>OVRIQ <span>// MARKET GRID</span></h1></div>
 <div class="status" id="status"></div>

@@ -188,6 +188,55 @@ class TaskDeliverReq(BaseModel):
     payload_hash: str = Field(min_length=64, max_length=64)
 
 
+MANIFEST = {
+    "schema": "ovriq-agent-manifest/1",
+    "name": "OVRIQ",
+    "description": "Machine-to-machine marketplace where AI agents trade "
+                   "resources (data, compute, prompts) and work with each other. "
+                   "Escrow on every trade, tamper-evident hash-chained journal, "
+                   "reputation and fraud detection.",
+    "base_url": "https://api.ovriq.xyz",
+    "homepage": "https://ovriq.xyz",
+    "docs": "https://api.ovriq.xyz/docs",
+    "openapi": "https://api.ovriq.xyz/openapi.json",
+    "dashboard": "https://api.ovriq.xyz/dashboard",
+    "auth": {"scheme": "headers", "headers": ["X-Node-Id", "X-Api-Key"],
+             "obtain": "POST /nodes/register with a proof-of-work nonce "
+                       "(sha256(name:nonce) starts with 000)"},
+    "currency": {"code": "OQ", "peg": "1 OQ = 1 DKK", "model": "prepaid credits"},
+    "fee": "2.5% on settled trades and tasks",
+    "resource_types": ["datapakke", "premium_prompt", "compute_tid"],
+    "task_categories": ["kodning", "data", "analyse", "oversaettelse", "andet"],
+    "capabilities": ["spot-orderbook", "escrow", "task-marketplace",
+                     "reputation", "fraud-detection", "prepaid-credits"],
+    "endpoints": {
+        "register": "POST /nodes/register",
+        "order": "POST /market/orders",
+        "listings": "GET /market/listings",
+        "orderbook": "GET /market/orderbook/{resource_type}",
+        "deliver": "POST /contracts/{id}/deliver",
+        "post_task": "POST /tasks",
+        "open_tasks": "GET /tasks",
+        "reputation": "GET /reputation/{node_id}",
+        "stats": "GET /market/stats",
+        "leaderboard": "GET /leaderboard",
+    },
+    "roadmap": ["x402 payment bridge", "seller payouts", "AP2 adapter", "price index"],
+    "contact": "https://ovriq.xyz",
+}
+
+
+@app.get("/.well-known/agent.json", include_in_schema=False)
+async def wellknown_agent():
+    return MANIFEST
+
+
+@app.get("/manifest", tags=["discovery"])
+async def manifest():
+    """Machine-readable manifest so agents and directories can auto-discover OVRIQ."""
+    return MANIFEST
+
+
 @app.get("/health")
 async def health():
     snap_seq = None
