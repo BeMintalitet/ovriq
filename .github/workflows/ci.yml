@@ -1,0 +1,36 @@
+name: OVRIQ CI
+on:
+  push: {branches: [main]}
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: {POSTGRES_USER: ovriq, POSTGRES_PASSWORD: ci, POSTGRES_DB: ovriq}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ovriq" --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Unit + persistens-tests
+        run: python -m pytest -q
+      - name: Sikkerhedsscan (SAST)
+        run: |
+          pip install bandit
+          bandit -r ovriq -q -ll   # fail på Medium+
+      - name: Postgres-journal integrationstest
+        env: {OVRIQ_TEST_PG_DSN: "postgres://ovriq:ci@localhost:5432/ovriq"}
+        run: python -m pytest -q tests/test_postgres.py
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t ovriq:${{ github.sha }} .
