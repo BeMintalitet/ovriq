@@ -2,40 +2,39 @@
 title OVRIQ - push til GitHub
 cd /d "%~dp0"
 echo.
-echo   ░▒▓ OVRIQ → GitHub ▓▒░
+echo   OVRIQ - push til GitHub
 echo.
 
 where git >nul 2>&1
-if errorlevel 1 (
-  echo   Git er ikke installeret. Installerer via winget...
-  winget install --id Git.Git -e --source winget
-  echo.
-  echo   Luk dette vindue og dobbeltklik PUSH.bat igen.
-  pause
-  exit /b
-)
+if errorlevel 1 goto nogit
 
-if exist .git rmdir /s /q .git
+if exist .git goto update
+
+echo   Foerste push: opretter git-historik...
 git init -b main
 git config user.name "BeMintalitet"
 git config user.email "benjaminfosskristoffersen@gmail.com"
 git config core.autocrlf false
+git remote add origin https://github.com/BeMintalitet/ovriq.git
 git add -A
-git commit -m "OVRIQ fase 1: Decimal-pengemotor, event-journal m. genstartsbevis, API, SDK, dashboard, landing page, Docker/CI"
-git remote add origin https://github.com/BeMintalitet/GitHub-org-ovriq-.git
+git commit -m "OVRIQ initial"
+git push -u origin main --force
+goto done
 
-echo.
-echo   Pusher... (foerste gang aabner GitHub-login i din browser - log ind der)
+:update
+echo   Committer aendringer oven paa eksisterende historik...
+git add -A
+git commit -m "OVRIQ update %date% %time%"
 git push -u origin main
-if errorlevel 1 (
-  echo.
-  echo   Push afvist - repo'et indeholder sikkert en README fra oprettelsen.
-  choice /c JN /m "  Overskriv repo'ets indhold med OVRIQ-koden? [J/N]"
-  if errorlevel 2 exit /b
-  git push -u origin main --force
-)
+if errorlevel 1 git push -u origin main --force
+goto done
 
+:done
 echo.
-echo   ✔ FAERDIG - se koden paa https://github.com/BeMintalitet/GitHub-org-ovriq-
-echo.
+echo   FAERDIG - https://github.com/BeMintalitet/ovriq
+pause
+exit /b
+
+:nogit
+echo   Git mangler. Installer: winget install --id Git.Git -e
 pause
